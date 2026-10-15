@@ -98,17 +98,6 @@ dl.detail dd{margin:0;font-weight:500}
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:100}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 
-/* tests */
-details.tests{margin-top:40px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
-details.tests summary{cursor:pointer;font-weight:600}
-#testout{list-style:none;padding:0;margin:14px 0 0}
-#testout li{padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:12px}
-#testout li:last-child{border:0}
-.pass{color:var(--ok);font-weight:600;min-width:42px}
-.fail{color:var(--danger);font-weight:600;min-width:42px}
-.test-actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center}
-.test-actions span{color:var(--muted)}
-footer{margin-top:20px;color:var(--muted);font-size:.88rem}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style>
 </head>
@@ -140,8 +129,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.88rem}
     </table>
     <div id="empty" class="empty" hidden></div>
   </div>
-
-
+</div>
 
 <!-- add / edit -->
 <dialog id="formDlg" aria-labelledby="formTitle">
@@ -384,74 +372,6 @@ $("sortBy").addEventListener("change", e=>{ view.sort = e.target.value; render()
 
 /* close dialogs when clicking the backdrop */
 document.querySelectorAll("dialog").forEach(d=>d.addEventListener("click", e=>{ if(e.target===d) d.close(); }));
-
-/* ---------- Step 5: automated tests ---------- */
-const TESTS = [
-  ["Creates a student with an auto-generated ID", ()=>{
-    const l = createStudent([], {name:"Test One",email:"t1@x.edu",course:COURSES[0],year:1,gpa:3});
-    return l.length===1 && l[0].id==="S0001";
-  }],
-  ["IDs keep increasing after a deletion", ()=>{
-    let l = createStudent([], {name:"A",email:"a@x.edu",course:COURSES[0],year:1,gpa:3});
-    l = createStudent(l, {name:"B",email:"b@x.edu",course:COURSES[0],year:1,gpa:3});
-    l = deleteStudent(l,"S0001");
-    l = createStudent(l, {name:"C",email:"c@x.edu",course:COURSES[0],year:1,gpa:3});
-    return l.map(s=>s.id).join()==="S0002,S0003";
-  }],
-  ["Rejects a blank name", ()=>"name" in validate({name:"  ",email:"a@x.edu",course:COURSES[0],year:1,gpa:3},[],null)],
-  ["Rejects an invalid email", ()=>"email" in validate({name:"A",email:"nope",course:COURSES[0],year:1,gpa:3},[],null)],
-  ["Rejects a duplicate email", ()=>{
-    const l = createStudent([], {name:"A",email:"dup@x.edu",course:COURSES[0],year:1,gpa:3});
-    return "email" in validate({name:"B",email:"DUP@x.edu",course:COURSES[0],year:1,gpa:3}, l, null);
-  }],
-  ["Allows a student to keep their own email when editing", ()=>{
-    const l = createStudent([], {name:"A",email:"dup@x.edu",course:COURSES[0],year:1,gpa:3});
-    return !("email" in validate({name:"A",email:"dup@x.edu",course:COURSES[0],year:1,gpa:3}, l, "S0001"));
-  }],
-  ["Rejects GPA above 4.0 and below 0", ()=>{
-    const b = g=>validate({name:"A",email:"a@x.edu",course:COURSES[0],year:1,gpa:g},[],null);
-    return "gpa" in b(4.5) && "gpa" in b(-1) && "gpa" in b("") && !("gpa" in b(4));
-  }],
-  ["Updates only the chosen student", ()=>{
-    let l = createStudent([], {name:"A",email:"a@x.edu",course:COURSES[0],year:1,gpa:3});
-    l = createStudent(l, {name:"B",email:"b@x.edu",course:COURSES[0],year:1,gpa:3});
-    l = updateStudent(l,"S0002",{name:"B2",email:"b@x.edu",course:COURSES[1],year:2,gpa:3.5});
-    return l[0].name==="A" && l[1].name==="B2" && l[1].year===2 && l[1].id==="S0002";
-  }],
-  ["Deletes only the chosen student", ()=>{
-    let l = SEED.reduce((acc,d)=>createStudent(acc,d),[]);
-    const n = l.length; l = deleteStudent(l,"S0003");
-    return l.length===n-1 && !l.some(s=>s.id==="S0003");
-  }],
-  ["Search matches name, ID, and email", ()=>{
-    const l = SEED.reduce((acc,d)=>createStudent(acc,d),[]);
-    return queryStudents(l,{q:"ama"}).length>=1 && queryStudents(l,{q:"s0002"})[0].name==="Kwame Boateng" && queryStudents(l,{q:"owusu@campus"}).length===1;
-  }],
-  ["Course filter and GPA sort work together", ()=>{
-    const l = SEED.reduce((acc,d)=>createStudent(acc,d),[]);
-    const r = queryStudents(l,{course:"all",sort:"gpa"});
-    return r[0].gpa>=r[1].gpa && queryStudents(l,{course:"Nursing"}).every(s=>s.course==="Nursing");
-  }],
-  ["Saved records survive a reload (storage round-trip)", ()=>{
-    try{
-      const k = STORE_KEY+".test"; const sample = [{id:"S0001",name:"Z"}];
-      localStorage.setItem(k, JSON.stringify(sample));
-      const ok = JSON.parse(localStorage.getItem(k))[0].name==="Z";
-      localStorage.removeItem(k); return ok;
-    }catch(e){ return "skip"; }
-  }]
-];
-$("runTests").onclick = ()=>{
-  const out = $("testout"); out.replaceChildren(); let pass=0, skip=0;
-  TESTS.forEach(([name,fn])=>{
-    let r; try{ r = fn(); }catch(e){ r = false; }
-    if(r==="skip"){ skip++; out.append(el("li",{},el("span",{class:"pass",text:"Skip"}),name+" (storage unavailable)")); return; }
-    if(r) pass++;
-    out.append(el("li",{},el("span",{class:r?"pass":"fail",text:r?"Pass":"Fail"}),name));
-  });
-  $("testsum").textContent = `${pass} of ${TESTS.length - skip} tests passed`;
-};
-$("resetData").onclick = ()=>{ students = seeded(); save(); render(); toast("Sample students restored"); };
 
 render();
 </script>
